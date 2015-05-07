@@ -3,9 +3,9 @@ import java.io.*;
 
 public class CollaborativeFiltering {
 
-	public static Map<Integer, Map<Integer, Double>> db = new HashMap<Integer, Map<Integer, Double>>();
-	public static Map<Integer, Double> averageRatings = new HashMap<Integer, Double>();
-	public static Map<Integer, Map<Integer, Double>> userCorrelations = new HashMap<Integer, Map<Integer, Double>>();
+	public static Map<Integer, Map<Integer, Float>> db = new HashMap<Integer, Map<Integer, Float>>();
+	public static Map<Integer, Float> averageRatings = new HashMap<Integer, Float>();
+	public static Map<Integer, Map<Integer, Float>> userCorrelations = new HashMap<Integer, Map<Integer, Float>>();
 	
 	public static void main(String[] args) {
 		long preproccessingStartTime = System.currentTimeMillis();
@@ -38,7 +38,7 @@ public class CollaborativeFiltering {
 		for (int userId1 : testUserIds) {
 			for (int userId2 : allUserIds) {
 				if (!userCorrelations.containsKey(userId1)) {
-					userCorrelations.put(userId1, new HashMap<Integer, Double>());
+					userCorrelations.put(userId1, new HashMap<Integer, Float>());
 				}
 				userCorrelations.get(userId1).put(userId2, userCorrelation(userId1, userId2));
 			}
@@ -50,7 +50,7 @@ public class CollaborativeFiltering {
 
 		
 		long predictionsStartTime = System.currentTimeMillis();
-		double meanAbsoluteError = meanAbsoluteError("/home/jesse/Classes/446/hw2/TestingRatings.txt");
+		float meanAbsoluteError = meanAbsoluteError("/home/jesse/Classes/446/hw2/TestingRatings.txt");
 		long predictionsEndTime = System.currentTimeMillis();
 		long predictionsDiff = (predictionsEndTime - predictionsStartTime) / 1000;
 		System.out.println("Run time: " + predictionsDiff + " seconds");
@@ -60,23 +60,24 @@ public class CollaborativeFiltering {
 	/**
 	 *	Returns the predicted rating for the given user and the given movie
 	 */
-	public static double predictedRating(int activeUserId, int movieId) {
-		double result = 0;
-		Map<Integer, Double> activeUserCorrelations = userCorrelations.get(activeUserId);
+	public static float predictedRating(int activeUserId, int movieId) {
+		float result = 0;
+		Map<Integer, Float> activeUserCorrelations = userCorrelations.get(activeUserId);
 		Set<Integer> allUsers = db.keySet();
 		for (int otherUserId : allUsers) {	// TODO: do not include active user
 			if (db.get(otherUserId).get(movieId) != null) {
 				result += activeUserCorrelations.get(otherUserId) * (db.get(otherUserId).get(movieId) - averageRatings.get(otherUserId));  //  userCorrelation(activeUserId, otherUserId) 
 			}
 		}
+		System.out.println(kValue(activeUserId, allUsers));
 		return averageRatings.get(activeUserId) + (kValue(activeUserId, allUsers) * result);
 	}
 	
 	/**
 	 *  Returns the mean absolute error of the predictions for the testing data
 	 */
-	private static double meanAbsoluteError(String testFilePath) {
-		double errorSum = 0;
+	private static float meanAbsoluteError(String testFilePath) {
+		float errorSum = 0;
 		int count = 0;
 		try {
 			Scanner scanner = new Scanner(new File(testFilePath));
@@ -85,9 +86,9 @@ public class CollaborativeFiltering {
 				String[] tokens = scanner.nextLine().split(",");
 				int userId = Integer.parseInt(tokens[0]);
 				int movieId = Integer.parseInt(tokens[1]);
-				double actualRating = Double.parseDouble(tokens[2]);
+				float actualRating = Float.parseFloat(tokens[2]);
 				
-				double predictedRating = predictedRating(userId, movieId);
+				float predictedRating = predictedRating(userId, movieId);
 				errorSum += Math.abs(predictedRating - actualRating);
 				count++;
 //				if (count % 100 == 0) {
@@ -104,24 +105,24 @@ public class CollaborativeFiltering {
 	/**
 	 *  Returns the normalizing factor making the absolute values of the weights sum to one
 	 */
-	private static double kValue(int activeUserId, Set<Integer> userIds) {
-		double result = 0;
+	private static float kValue(int activeUserId, Set<Integer> userIds) {
+		float result = 0;
 		for (int otherUserId : userIds) {
 			result += Math.abs(userCorrelation(activeUserId, otherUserId));
 		}
-		return 1.0 / result;
+		return 1 / result;
 	}
 	
 	/**
 	 *  Returns the average movie rating for the given user across all movies he has rated
 	 */
-	private static double averageUserRating(int userId) {
-		Collection<Double> ratings = db.get(userId).values();
+	private static float averageUserRating(int userId) {
+		Collection<Float> ratings = db.get(userId).values();
 		if (ratings == null || ratings.size() == 0) {
 			return 0;
 		}
-		double ratingSum = 0;
-		for (double rating : ratings) {
+		float ratingSum = 0;
+		for (float rating : ratings) {
 			ratingSum += rating;
 		}
 		return ratingSum / ratings.size();
@@ -130,17 +131,17 @@ public class CollaborativeFiltering {
 	/**
 	 *  Returns the correlation coefficient between the two users
 	 */
-	private static double userCorrelation(int activeUserId, int otherUserId) {
+	private static float userCorrelation(int activeUserId, int otherUserId) {
 		Set<Integer> movieIds = intersectionOfMoviesRated(activeUserId, otherUserId);
-		Map<Integer, Double> activeUserRatings = db.get(activeUserId);
-		Map<Integer, Double> otherUserRatings = db.get(otherUserId);
-		double activeUserRatingAverage = averageRatings.get(activeUserId); //averageUserRating(activeUserId);
-		double otherUserRatingAverage = averageRatings.get(otherUserId); //averageUserRating(otherUserId);
-		double numerator = 0;
-		double denominator = 0;
+		Map<Integer, Float> activeUserRatings = db.get(activeUserId);
+		Map<Integer, Float> otherUserRatings = db.get(otherUserId);
+		float activeUserRatingAverage = averageRatings.get(activeUserId); //averageUserRating(activeUserId);
+		float otherUserRatingAverage = averageRatings.get(otherUserId); //averageUserRating(otherUserId);
+		float numerator = 0;
+		float denominator = 0;
 		for (int movieId : movieIds) {
-			double activeUserDiff = activeUserRatings.get(movieId) - activeUserRatingAverage;
-			double otherUserDiff = otherUserRatings.get(movieId) - otherUserRatingAverage; 
+			float activeUserDiff = activeUserRatings.get(movieId) - activeUserRatingAverage;
+			float otherUserDiff = otherUserRatings.get(movieId) - otherUserRatingAverage; 
 			numerator += activeUserDiff * otherUserDiff;
 			denominator += Math.sqrt(Math.pow(activeUserDiff, 2) * Math.pow(otherUserDiff, 2));
 		}
@@ -172,9 +173,9 @@ public class CollaborativeFiltering {
 				String[] tokens = scanner.nextLine().split(",");
 				int userId = Integer.parseInt(tokens[0]);
 				int movieId = Integer.parseInt(tokens[1]);
-				double rating = Double.parseDouble(tokens[2]);
+				float rating = Float.parseFloat(tokens[2]);
 				if (!db.containsKey(userId)) {
-					db.put(userId, new HashMap<Integer, Double>());	
+					db.put(userId, new HashMap<Integer, Float>());	
 				}
 				db.get(userId).put(movieId, rating);
 			}
