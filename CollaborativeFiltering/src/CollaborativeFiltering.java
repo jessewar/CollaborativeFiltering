@@ -6,6 +6,7 @@ public class CollaborativeFiltering {
 	public static Map<Integer, Map<Integer, Float>> db = new HashMap<Integer, Map<Integer, Float>>();
 	public static Map<Integer, Float> averageRatings = new HashMap<Integer, Float>();
 	public static Map<Integer, Map<Integer, Float>> userCorrelations = new HashMap<Integer, Map<Integer, Float>>();
+	public static Map<Integer, Float> kValues = new HashMap<Integer, Float>();
 	
 	public static void main(String[] args) {
 		long preproccessingStartTime = System.currentTimeMillis();
@@ -32,7 +33,10 @@ public class CollaborativeFiltering {
 			e.printStackTrace();
 		}
 		
-		System.out.println("here");
+		// Cache k-values for each user in the test set
+		for (int userId : testUserIds) {
+			kValues.put(userId, kValue(userId, allUserIds));
+		}
 		
 		// Cache the correlation between every pair of users
 		for (int userId1 : testUserIds) {
@@ -43,12 +47,13 @@ public class CollaborativeFiltering {
 				userCorrelations.get(userId1).put(userId2, userCorrelation(userId1, userId2));
 			}
 		}
-
+		
+		// Print time spent pre-processing data
 		long preproccessingEndTime = System.currentTimeMillis();
 		long preproccessingDiff = (preproccessingEndTime - preproccessingStartTime) / 1000;
 		System.out.println("Preproccessing done: " + preproccessingDiff + " seconds");		
 
-		
+		// Print time spent predicting ratings for test set
 		long predictionsStartTime = System.currentTimeMillis();
 		float meanAbsoluteError = meanAbsoluteError("/home/jesse/Classes/446/hw2/TestingRatings.txt");
 		long predictionsEndTime = System.currentTimeMillis();
@@ -69,8 +74,7 @@ public class CollaborativeFiltering {
 				result += activeUserCorrelations.get(otherUserId) * (db.get(otherUserId).get(movieId) - averageRatings.get(otherUserId));  //  userCorrelation(activeUserId, otherUserId) 
 			}
 		}
-		System.out.println(kValue(activeUserId, allUsers));
-		return averageRatings.get(activeUserId) + (kValue(activeUserId, allUsers) * result);
+		return averageRatings.get(activeUserId) + (kValues.get(activeUserId) * result);
 	}
 	
 	/**
@@ -81,8 +85,8 @@ public class CollaborativeFiltering {
 		int count = 0;
 		try {
 			Scanner scanner = new Scanner(new File(testFilePath));
-//			while (scanner.hasNextLine()) {
-			for (int i = 0; i < 100; i++) {
+			while (scanner.hasNextLine()) {
+			//for (int i = 0; i < 100; i++) {
 				String[] tokens = scanner.nextLine().split(",");
 				int userId = Integer.parseInt(tokens[0]);
 				int movieId = Integer.parseInt(tokens[1]);
