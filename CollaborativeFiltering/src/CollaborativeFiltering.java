@@ -7,6 +7,7 @@ public class CollaborativeFiltering {
 	public static Map<Integer, Float> averageRatings = new HashMap<Integer, Float>();
 	public static Map<Integer, Map<Integer, Float>> userCorrelations = new HashMap<Integer, Map<Integer, Float>>();
 	public static Map<Integer, Float> kValues = new HashMap<Integer, Float>();
+	public static float defaultVote;
 	
 	public static void main(String[] args) {
 		long preproccessingStartTime = System.currentTimeMillis();
@@ -18,6 +19,14 @@ public class CollaborativeFiltering {
 		for (int userId : allUserIds) {
 			averageRatings.put(userId, averageUserRating(userId));
 		}
+		
+		// Calculate global default vote value
+		float averageRatingsSum = 0;
+		for (int userId : averageRatings.keySet()) {
+			averageRatingsSum += averageRatings.get(userId);
+		}
+		defaultVote = averageRatingsSum / averageRatings.size();
+		System.out.println("Default vote: " + defaultVote);
 		
 		// Read set of all user IDs in test file
 		Set<Integer> testUserIds = new HashSet<Integer>();  // 1701 users
@@ -44,7 +53,7 @@ public class CollaborativeFiltering {
 				if (!userCorrelations.containsKey(userId1)) {
 					userCorrelations.put(userId1, new HashMap<Integer, Float>());
 				}
-				userCorrelations.get(userId1).put(userId2, userCorrelation(userId1, userId2));
+				userCorrelations.get(userId1).put(userId2, userCorrelation(userId1, userId2, true));
 			}
 		}
 		
@@ -71,7 +80,7 @@ public class CollaborativeFiltering {
 		Set<Integer> allUsers = db.keySet();
 		for (int otherUserId : allUsers) {	// TODO: do not include active user
 			if (db.get(otherUserId).get(movieId) != null) {
-				result += activeUserCorrelations.get(otherUserId) * (db.get(otherUserId).get(movieId) - averageRatings.get(otherUserId));  //  userCorrelation(activeUserId, otherUserId) 
+				result += activeUserCorrelations.get(otherUserId) * (db.get(otherUserId).get(movieId) - averageRatings.get(otherUserId));
 			}
 		}
 		return averageRatings.get(activeUserId) + (kValues.get(activeUserId) * result);
@@ -86,7 +95,6 @@ public class CollaborativeFiltering {
 		try {
 			Scanner scanner = new Scanner(new File(testFilePath));
 			while (scanner.hasNextLine()) {
-			//for (int i = 0; i < 100; i++) {
 				String[] tokens = scanner.nextLine().split(",");
 				int userId = Integer.parseInt(tokens[0]);
 				int movieId = Integer.parseInt(tokens[1]);
@@ -95,9 +103,6 @@ public class CollaborativeFiltering {
 				float predictedRating = predictedRating(userId, movieId);
 				errorSum += Math.abs(predictedRating - actualRating);
 				count++;
-//				if (count % 100 == 0) {
-//					System.out.println("Iteration " + (count / 100) + ": " + (errorSum / count));
-//				}
 			}
 			scanner.close();
 		} catch (FileNotFoundException e) {
@@ -112,7 +117,7 @@ public class CollaborativeFiltering {
 	private static float kValue(int activeUserId, Set<Integer> userIds) {
 		float result = 0;
 		for (int otherUserId : userIds) {
-			result += Math.abs(userCorrelation(activeUserId, otherUserId));
+			result += Math.abs(userCorrelations.get(activeUserId).get(otherUserId));
 		}
 		return 1 / result;
 	}
@@ -135,29 +140,48 @@ public class CollaborativeFiltering {
 	/**
 	 *  Returns the correlation coefficient between the two users
 	 */
-	private static float userCorrelation(int activeUserId, int otherUserId) {
-		Set<Integer> movieIds = intersectionOfMoviesRated(activeUserId, otherUserId);
+	private static float userCorrelation(int activeUserId, int otherUserId, boolean defaultVoting) {
+		Set<Integer> movieIds;
+		if (defaultVoting) {
+			movieIds = unionOfMoviesRated(activeUserId, otherUserId);
+		} else {
+			movieIds = intersectionOfMoviesRated(activeUserId, otherUserId);	
+		}
+		if (movieIds == null || movieIds.size() == 0) {
+			return 0;
+		}
 		Map<Integer, Float> activeUserRatings = db.get(activeUserId);
 		Map<Integer, Float> otherUserRatings = db.get(otherUserId);
-		float activeUserRatingAverage = averageRatings.get(activeUserId); //averageUserRating(activeUserId);
-		float otherUserRatingAverage = averageRatings.get(otherUserId); //averageUserRating(otherUserId);
+		float activeUserRatingAverage = averageRatings.get(activeUserId);
+		float otherUserRatingAverage = averageRatings.get(otherUserId);
 		float numerator = 0;
 		float denominator = 0;
 		for (int movieId : movieIds) {
-			float activeUserDiff = activeUserRatings.get(movieId) - activeUserRatingAverage;
-			float otherUserDiff = otherUserRatings.get(movieId) - otherUserRatingAverage; 
+			float activeUserRating;
+			if (activeUserRatings.containsKey(movieId)) {
+				activeUserRating = activeUserRatings.get(movieId);
+			} else {
+				activeUserRating = defaultVote;
+			}
+			float otherUserRating;
+			if (otherUserRatings.containsKey(movieId)) {
+				otherUserRating = otherUserRatings.get(movieId);
+			} else {
+				otherUserRating = defaultVote;
+			}
+			float activeUserDiff = activeUserRating - activeUserRatingAverage;
+			float otherUserDiff = otherUserRating - otherUserRatingAverage; 
 			numerator += activeUserDiff * otherUserDiff;
 			denominator += Math.sqrt(Math.pow(activeUserDiff, 2) * Math.pow(otherUserDiff, 2));
 		}
-		
-		if (numerator == 0 || denominator == 0) {
+		if (denominator == 0) {
 			return 0;
 		}
 		return numerator / denominator;
 	}
 	
 	/**
-	 *  Returns the list of movie IDs that both users have rated
+	 *  Returns the set of movie IDs that both users have rated
 	 */
 	private static Set<Integer> intersectionOfMoviesRated(int activeUserId, int otherUserId) {
 		Set<Integer> activeUserMovies = db.get(activeUserId).keySet();
@@ -165,6 +189,21 @@ public class CollaborativeFiltering {
 		Set<Integer> intersection = new HashSet<Integer>(activeUserMovies);
 		intersection.retainAll(otherUserMovies);
 		return intersection;
+	}
+	
+	/**
+	 *  Returns the set of movie IDs that either users have rated
+	 */
+	private static Set<Integer> unionOfMoviesRated(int activeUserId, int otherUserId) {
+		Set<Integer> activeUserMovies = db.get(activeUserId).keySet();
+		Set<Integer> otherUserMovies = db.get(otherUserId).keySet();
+		Set<Integer> union = new HashSet<Integer>(activeUserMovies);
+		union.addAll(otherUserMovies);
+		if (union.size() == activeUserMovies.size()) {
+			return null;  // only use default voting for users who match the active user on at least one item
+		} else {
+			return union;			
+		}
 	}
 	
 	/**
