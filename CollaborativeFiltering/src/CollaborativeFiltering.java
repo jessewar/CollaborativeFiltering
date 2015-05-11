@@ -42,11 +42,6 @@ public class CollaborativeFiltering {
 			e.printStackTrace();
 		}
 		
-		// Cache k-values for each user in the test set
-		for (int userId : testUserIds) {
-			kValues.put(userId, kValue(userId, allUserIds));
-		}
-		
 		// Cache the correlation between every pair of users
 		for (int userId1 : testUserIds) {
 			for (int userId2 : allUserIds) {
@@ -57,6 +52,11 @@ public class CollaborativeFiltering {
 			}
 		}
 		
+		// Cache k-values for each user in the test set
+		for (int userId : testUserIds) {
+			kValues.put(userId, kValue(userId, allUserIds));
+		}
+		
 		// Print time spent pre-processing data
 		long preproccessingEndTime = System.currentTimeMillis();
 		long preproccessingDiff = (preproccessingEndTime - preproccessingStartTime) / 1000;
@@ -64,11 +64,10 @@ public class CollaborativeFiltering {
 
 		// Print time spent predicting ratings for test set
 		long predictionsStartTime = System.currentTimeMillis();
-		float meanAbsoluteError = meanAbsoluteError("/home/jesse/Classes/446/hw2/TestingRatings.txt");
+		calculateErrorValues("/home/jesse/Classes/446/hw2/TestingRatings.txt");
 		long predictionsEndTime = System.currentTimeMillis();
 		long predictionsDiff = (predictionsEndTime - predictionsStartTime) / 1000;
 		System.out.println("Run time: " + predictionsDiff + " seconds");
-		System.out.println("Mean absolute error: " + meanAbsoluteError);
 	}
 	
 	/**
@@ -89,8 +88,9 @@ public class CollaborativeFiltering {
 	/**
 	 *  Returns the mean absolute error of the predictions for the testing data
 	 */
-	private static float meanAbsoluteError(String testFilePath) {
-		float errorSum = 0;
+	private static void calculateErrorValues(String testFilePath) {
+		float absoluteError = 0;
+		float squaredError = 0;
 		int count = 0;
 		try {
 			Scanner scanner = new Scanner(new File(testFilePath));
@@ -101,14 +101,18 @@ public class CollaborativeFiltering {
 				float actualRating = Float.parseFloat(tokens[2]);
 				
 				float predictedRating = predictedRating(userId, movieId);
-				errorSum += Math.abs(predictedRating - actualRating);
+				absoluteError += Math.abs(predictedRating - actualRating);
+				squaredError += Math.pow(predictedRating - actualRating, 2);
 				count++;
 			}
 			scanner.close();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
-		return errorSum / count;
+		float meanAbsoluteError = absoluteError / count;
+		float rootMeanSquaredError = (float) Math.sqrt(squaredError / count);
+		System.out.println("Mean absolute error: " + meanAbsoluteError);
+		System.out.println("Root mean squared error: " + rootMeanSquaredError);
 	}
 	
 	/**
